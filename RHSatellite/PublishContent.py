@@ -38,14 +38,6 @@ def main(argv):
 	if str_ENV_Promote == '':
 		printHelp(2)
 
-	# Content View to Publish
-	#str_CV_Publish = 'Gradebook Testing RHEL6 x64'
-
-	# Composite Content View to Update
-	#str_CCV_Publish = 'CV Gradebook Testing'
-
-	# Environment to promote to
-	#str_ENV_Promote = 'Gradebook Testing'
 
 	# Setup hammer command to publish the product
 	bash_CV_Publish = "hammer content-view publish --organization='AU' --name='" + str_CV_Publish +"'"
