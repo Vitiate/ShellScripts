@@ -1,0 +1,44 @@
+-- PGSQL Do Script to rename all table prefixes
+-- Prior to running this you must run the following from the shell, where cde_prod_prod is the database you are modifying:
+-- $: createlang -d cde_prod plpgsql
+-- Then execute the following SQL:
+-- CREATE language plpgsql;
+-- Finally, connect to the database "\c cde_prod" and copy and paste the following into psql.
+CREATE OR REPLACE FUNCTION rename_prefix() RETURNS integer AS $$
+DECLARE
+	r record;
+	prefix varchar;
+	searchString varchar;
+	newPrefix varchar;
+	oldTableName varchar;
+	newTableName varchar;
+
+BEGIN
+	-- The following 2 variables need to be changed to match the requirements.
+	-- Name of the prefix we are going to change
+	prefix := 'moodle17_cde_';
+	-- The prefix we are going to change to
+	newPrefix := 'mdl_';
+
+	searchString := "prefix"||'%';
+	RAISE NOTICE 'Starting rename';
+    FOR r IN SELECT table_schema, table_name, table_type FROM information_schema.tables
+             WHERE table_type = 'BASE TABLE' AND table_schema = 'public' AND table_name LIKE searchString
+    LOOP
+    	RAISE NOTICE 'Found Table %s', r.table_name;
+    	oldTableName := '';
+    	oldTableName := r.table_name;
+    	newTableName := replace(r.table_name, prefix, newPrefix);
+    	RAISE NOTICE 'Rename Table from %s to %s', r.table_name, newTableName;
+    	EXECUTE '
+    		ALTER TABLE ' || quote_ident(oldTableName) || ' RENAME TO ' || quote_ident(newTableName) || ';
+    	';
+    END LOOP;
+    RETURN 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT rename_prefix();
+
+DROP FUNCTION rename_prefix();
+-- Copy me too, that way everything executes.
+
