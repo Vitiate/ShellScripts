@@ -1,0 +1,55 @@
+# (Required)
+# Rule name, must be unique
+name: Audit SSHD_AUTH Failures
+
+# (Required)
+# Index to search, wildcard supported
+index: logstash-*
+
+filter:
+  - term:
+      tags: "sshd_auth"
+  - term:
+      action.raw: "Login Failure" 
+
+
+# (Required)
+# Type of alert.
+type: frequency
+num_events: 1
+timeframe:
+  minutes: 1
+#alert_text_type: alert_text_only
+top_count_keys:
+  - "client_ip"
+  - "host"
+  - "auth_username"
+include: [""]
+alert_text: |
+  At {3} ElastAlert has identified a failed authentication attempt on {4}:{0}.
+  http://elktest.cs.athabascau.ca/app/kibana#/dashboard/SSH-Authentication-Failures 
+  This attempt originated from: {1}.
+alert_text_args:
+  - auth_username
+  - client_ip
+  - message
+  - "@timestamp"
+  - host
+alert_subject: "Failed authentication attempt {0}:{1} @ {3}"
+alert_subject_args:
+  - host
+  - auth_username 
+  - message
+  - "@timestamp"
+  - top_count_keys
+alert: "elastalert_modules.servicenow_alert.ServiceNowAlerter"
+short_description: 'This incident identifies a failed authentication attempt'
+comments: 'Automated Authentication Failure Notification'
+assignment_group: 'Linux Server Admin'
+category: 'Other'
+subcategory: 'Service Request'
+cmdb_ci: 'Linux Server'
+caller_id: 'Jeremy Tirrell'
+servicenow_rest_url: "https://instance.service-now.com/api/now/v1/table/incident"
+username: "username"
+password: "password"
