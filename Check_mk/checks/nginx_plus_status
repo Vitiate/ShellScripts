@@ -1,0 +1,51 @@
+#!/usr/bin/python
+import requests
+import json
+import pprint
+factory_settings["nginx_plus_status_default_values"] = {
+    'config': ((None, None), False),
+}
+
+
+def inventory_nginx_status(info):
+    #pprint.pprint(info)
+    data = dict(info) #check_nginx_plus_get_dict()
+    inv = []
+    for attribute, value in data.iteritems():
+        yield(str(attribute),None)
+
+def check_nginx_plus_status(item, params, info):
+    state = 0
+
+    all_data = dict(info)
+
+    if item not in all_data:
+        pprint.pprint(all_data[1])
+        return (3, 'Unable to find ' + item + ' in data')
+    value = all_data[item]
+    if 'health_checks_unhealthy' in item:
+        if value == '1':
+            state = 2
+    if 'state' in item:
+        if value == 'unhealthy':
+            state = 2
+    worst_state = 0
+    output      = []
+    perfdata    = []
+
+    extra_info = ''
+    display_value = value
+    perfdata.append(tuple([item.replace(' ', '_'), display_value]))
+    output.append('%s: %s%s' % (item, display_value, extra_info))
+
+    return (state, ', '.join(output), perfdata)
+   
+   
+
+check_info['nginx_plus_status'] = {
+    "check_function" :      check_nginx_plus_status,
+    "inventory_function" :  inventory_nginx_status,
+    "service_description" : "%s",
+    "has_perfdata" :        True,
+    "group" :               "nginx_plus_status",
+}

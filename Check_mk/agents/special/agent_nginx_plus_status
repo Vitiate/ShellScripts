@@ -1,0 +1,141 @@
+#!/usr/bin/python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# +------------------------------------------------------------------+
+# |             ____ _               _        __  __ _  __           |
+# |            / ___| |__   ___  ___| | __   |  \/  | |/ /           |
+# |           | |   | '_ \ / _ \/ __| |/ /   | |\/| | ' /            |
+# |           | |___| | | |  __/ (__|   <    | |  | | . \            |
+# |            \____|_| |_|\___|\___|_|\_\___|_|  |_|_|\_\           |
+# |                                                                  |
+# | Copyright Mathias Kettner 2014             mk@mathias-kettner.de |
+# +------------------------------------------------------------------+
+#
+# This file is part of Check_MK.
+# The official homepage is at http://mathias-kettner.de/check_mk.
+#
+# check_mk is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# ails.  You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+import getopt, os, sys, socket, re, pprint, requests, json
+#pprint.pprint(sys.argv)
+#address = "http://%s:%s/status" % (sys.argv[1], sys.argv[2])
+
+def usage():
+    sys.stderr.write("""Check_MK nginx plus Agent
+USAGE: agent_nginx_plus_status [OPTIONS] PROTO HOST PORT PAGE
+       agent_nginx_plus_status -h
+ARGUMENTS:
+   HOST                         Hostname or IP address of the nginx instance to monitor
+OPTIONS:
+  -h, --help                    Show this help message and exit
+  -t, --timeout SEC             Set the network timeout to <SEC> seconds.
+                                Default is 10 seconds. Note: the timeout is not
+                                applied to the whole check, instead it is used for
+                                each API query.
+  --debug                       Debug mode: let Python exceptions come through
+""")
+
+short_options = 'h:t:d'
+long_options  = [
+    'help', 'timeout=', 'debug'
+]
+host_proto        = None
+host_address      = None
+host_port         = None
+host_page         = None
+opt_debug         = False
+opt_timeout       = 10
+
+def merge_dicts(x, y):
+    z = x.copy()
+    z.update(y)
+    return z
+
+def recursiveDict(attr,itm):
+    outDict= {}
+    if isinstance(itm, dict):
+        for attribute, value in itm.iteritems():
+            outDict = merge_dicts(outDict, recursiveDict(attr + '_' + attribute, value))
+    else:
+        if (str(itm)[:1] == '['):
+            # If itm is not a dictionary check to see if it contains an array
+            # itm is an array of json strings
+            # Clean up the json array item
+            itm = str(itm).replace("[","")
+            itm = str(itm).replace("False","'False'")
+            itm = str(itm).replace("True","'True'")
+            itm = str(itm).replace("'","\"")
+            itm = str(itm).replace("u\"","\"")
+            arryItm = str(itm).split("],")  # Split the string into arrays
+            i = 0   # create an index to identify each array item
+            for innerItm in arryItm:
+                itm = str(innerItm)[:-1]
+                jsonItem = json.loads(itm)
+                for attribute, value in jsonItem.iteritems():
+                    if isinstance(value, dict):
+                        outDict = merge_dicts(outDict, recursiveDict(attr + '_' + str(i) + '_' + attribute, value))
+                    else:
+                        outDict = merge_dicts(outDict, recursiveDict(attr + '_' + str(i) + '_' + attribute, value))
+                i=i+1
+        else:
+            # itm is a value
+            outDict[attr] = str(itm)
+        
+    return outDict
+
+def check_nginx_plus_get_dict(address):
+    r = requests.get(address)
+    status_data = r.json()
+
+    dataDict = {}
+    for attribute, value in status_data.iteritems():
+        dataDict = merge_dicts(dataDict,recursiveDict(attribute, value))
+    return dataDict
+
+
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:], short_options, long_options)
+except getopt.GetoptError, err:
+    sys.stderr.write("%s\n" % err)
+    sys.exit(1)
+
+for o,a in opts:
+    if o in [ '--debug' ]:
+        opt_debug = True
+    elif o in [ '-t', '--timeout' ]:
+        opt_timeout = int(a)
+    elif o in [ '-h', '--help' ]:
+        usage()
+        sys.exit(0)
+
+if len(args) == 4:
+    host_proto = args[0]
+    host_address = args[1]
+    host_port = args[2]
+    host_page = args[3]
+elif not args:
+    sys.stderr.write("ERROR: No host given.\n")
+    sys.exit(1)
+else:
+    sys.stderr.write("ERROR: Please specify exactly one host.\n")
+    sys.exit(1)
+
+socket.setdefaulttimeout(opt_timeout)
+
+class RequestError(Exception):
+    pass
+
+address = "%s://%s:%s/%s" % (host_proto, host_address, host_port, host_page)
+dataDict = check_nginx_plus_get_dict(address)
+
+print '<<<nginx_plus_status>>>'
+for attribute, value in dataDict.iteritems():
+    print attribute + " " + value
